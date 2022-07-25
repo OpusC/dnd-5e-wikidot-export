@@ -1,3 +1,4 @@
+from re import A
 import requests
 from bs4 import BeautifulSoup
 
@@ -9,70 +10,119 @@ from bs4 import BeautifulSoup
 URL = "http://dnd5e.wikidot.com/spells"
 
 page = requests.get(URL)
-
-soup = BeautifulSoup(page.content, "html.parser")
-
+soup = BeautifulSoup(page.content, "lxml")
 results = soup.find(id="page-content")
-
-data = []
-spell_data = []
-#testing code
-
-#should navigate to the link for each spell and retrieve
-#Level, Description + at higher levels
-#TODO: Decription parser should be able to handle tables
-def get_link_info(url_path):
-    #url_path = url_path.replace('/spells', '') #fix url format
-    spell_page = requests.get(url_path)
-    spell_soup = BeautifulSoup(spell_page.content, 'html.parser')
-    spell_soup = spell_soup.find('div', id='page-content')
-    for spell in spell_soup:
-        cols = spell_soup.find_all('p')
-        cols = [ele.text.strip() for ele in cols]
-        print(len(cols))
-        print(cols)
-        break
-        ###TODO: orangize each item as an item in a list
-        ### First <p> is source (REQUIRED)
-        ### Second <p> is school + level (BOTH NOT NEEDED)
-        ### Third <p> has casting time, range, components, and duration
-
-        ###NOTE: Components contains duplicate from all spells page of V, S, M, 
-        ###BUT also contains gold valued components (Required)
-
-        ### All subsequent <p> is description. There could be several paragraphs, or even tables within this
-        ### 2nd to last <p> is "At Higher Levels"
-        ### Final <p> is which classes have this spell in the spell list
-
-
-        ##NOTE: Everything except descrption <p>'s start with <strong>
-        #data.append(cols)
-        spell_data.append(cols)
-
-
 
 #Selecting the spell tab (0-9, cantrip-9)
 tab1 = soup.find('div', id='wiki-tab-0-0')
-table = tab1.find('table', attrs={'class', 'wiki-content-table'})
+data = []
+spell_data = []
+spell_page_info = []
 
-rows = table.find_all('tr')
-links = table.find_all('a')
+#should navigate to the link in arg and retrieve the following info as a list:
+#Sourcebook
+#Components
+#Description (with table included) + at higher levels
+#Classes that have the spell in their spell list
 
-total_links = [] ##removable_line
+def spell_page_parser(url):
+    spell_page = requests.get(url)
+    spell_soup = BeautifulSoup(spell_page.content, 'html.parser')
+    spell_soup = spell_soup.find('div', id='page-content')
 
-#Get all links in tab
-for a in table.find_all('a', href=True):
-    temp = a.text.strip()
-    total_links.append([temp]) ##testing line
-    get_link_info((URL.replace('/spells', '') + a['href']))
+    rows = spell_soup.find_all('p')
+
+
+    output = []
+
+    ###Spell source
+    spell_source = rows[0]
+
+    output.append(spell_source.text[8:])
+    ###Spell source
+
+    ###Spell components 
+    components_info = rows[2]
+    components_info = components_info.text[components_info.text.find('Components:'):components_info.text.find('Duration:')]
+
+    if '(' in components_info:
+        index1 = components_info.find('(') + 1
+        index2 = components_info.find(')')
+        output.append(components_info[index1:index2])
+    else:
+        output.append('None')
+    ###Spell components 
+
+
+    ###TODO: Decription parser should be able to handle tables and bullet lists
+    ###TODO: orangize each item as an item in a list
+    ###NOTE: Tables can also be statblocks http://dnd5e.wikidot.com/spell:summon-celestial
+    ### 2nd to last <p> is "At Higher Levels"
+    ###NOTE: descriptions may contain 
+        # <ul>
+        #   <li>
+        #   </li>
+        # >/ul>
+        #for bulleted items
+    #EX: http://dnd5e.wikidot.com/spell:greater-restoration
     
+    ###TODO: Handle tables in description (probably create a seperate function for this)
+    ###Spell descriptions 
+    description = rows[3:-1]
+    description_text = ""
+    for p in description:
+        description_text += p.text
+        ###TODO: "�" symbol is supposed to be "'"
+        description_text = description_text.replace("�", "asfdasdfasdfa")
+        output.append(description_text)
+    ###Spell descriptions 
+
+    ###Spell Lists 
+    spell_lists = rows[-1]
+    output.append(spell_lists.text[13:])
+    ###Spell Lists 
+    
+    
+    ###I forget wtf this is but its broken (example list formatter probably)
+    # for spell in spell_soup:
+    #     cols = spell_soup.find_all('p')
+    #     cols = [ele.text.strip() for ele in cols]
+    #     print(cols)
+    ###I forget wtf this is but its broken
+    return output
+
+
+    
+
+
+###TODO: move the table parser into this function, and try to make it re-usable for all tables
+def table_parser(table):
+    return 0 #stub
+
+
+#
+table = tab1.find('table', attrs={'class', 'wiki-content-table'})
+rows = table.find_all('tr')
+# links = table.find_all('a')
+
+
+
+###Get info from link in table
+# for a in table.find_all('a', href=True):
+#     spell_page_info.append(spell_page_parser((URL.replace('/spells', '') + a['href'])))
+###Get info from link in table
+
+###ALL SPELLS TABLE PARSE 
 for row in rows:
     #get titles and items in table
     cols = row.find_all('th') or row.find_all('td')
     #print(cols)
     cols = [ele.text.strip() for ele in cols]
     data.append([ele for ele in cols if ele])
+###ALL SPELLS TABLE PARSE 
 
+#print(spell_page_info)
+#spell_page_parser("http://dnd5e.wikidot.com/spell:booming-blade")
 # print(len(total_links))
 # print(spell_data)
-#print(data)
+print(data)
